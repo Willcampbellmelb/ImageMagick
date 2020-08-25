@@ -93,13 +93,11 @@
 static const char
   xmp_namespace[] = "http://ns.adobe.com/xap/1.0/ ";
 
-#if !defined(MAGICKCORE_WINDOWS_SUPPORT)
 /*
   Forward declarations.
 */
 static MagickBooleanType
   WriteHEICImage(const ImageInfo *,Image *,ExceptionInfo *);
-#endif
 
 /*x
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -609,9 +607,7 @@ ModuleExport size_t RegisterHEICImage(void)
   entry=AcquireMagickInfo("HEIC","HEIC","High Efficiency Image Format");
 #if defined(MAGICKCORE_HEIC_DELEGATE)
   entry->decoder=(DecodeImageHandler *) ReadHEICImage;
-#if !defined(MAGICKCORE_WINDOWS_SUPPORT)
   entry->encoder=(EncodeImageHandler *) WriteHEICImage;
-#endif
 #endif
   entry->magick=(IsImageFormatHandler *) IsHEIC;
   entry->mime_type=ConstantString("image/x-heic");
@@ -624,9 +620,7 @@ ModuleExport size_t RegisterHEICImage(void)
   entry=AcquireMagickInfo("HEIC","AVIF","AV1 Image File Format");
 #if defined(MAGICKCORE_HEIC_DELEGATE)
   entry->decoder=(DecodeImageHandler *) ReadHEICImage;
-#if !defined(MAGICKCORE_WINDOWS_SUPPORT)
   entry->encoder=(EncodeImageHandler *) WriteHEICImage;
-#endif
 #endif
   entry->magick=(IsImageFormatHandler *) IsHEIC;
   entry->mime_type=ConstantString("image/x-heic");
@@ -691,7 +685,7 @@ ModuleExport void UnregisterHEICImage(void)
 %
 */
 
-#if defined(MAGICKCORE_HEIC_DELEGATE) && !defined(MAGICKCORE_WINDOWS_SUPPORT)
+#if defined(MAGICKCORE_HEIC_DELEGATE)
 #if LIBHEIF_NUMERIC_VERSION >= 0x01030000
 static void WriteProfile(struct heif_context *context,Image *image,
   ExceptionInfo *exception)
@@ -855,6 +849,20 @@ static MagickBooleanType WriteHEICImage(const ImageInfo *image_info,
       *p_cr;
 
     /*
+      Get encoder for the specified format.
+    */
+#if LIBHEIF_NUMERIC_VERSION > 0x01060200
+    if (LocaleCompare(image_info->magick,"AVIF") == 0)
+      error=heif_context_get_encoder_for_format(heif_context,
+        heif_compression_AV1,&heif_encoder);
+    else
+#endif
+      error=heif_context_get_encoder_for_format(heif_context,
+        heif_compression_HEVC,&heif_encoder);
+    status=IsHeifSuccess(&error,image,exception);
+    if (status == MagickFalse)
+      break;
+    /*
       Transform colorspace to YCbCr.
     */
     if (image->colorspace != YCbCrColorspace)
@@ -939,16 +947,6 @@ static MagickBooleanType WriteHEICImage(const ImageInfo *image_info,
     /*
       Code and actually write the HEIC image
     */
-    error=heif_context_get_encoder_for_format(heif_context,
-      heif_compression_HEVC,&heif_encoder);
-#if LIBHEIF_NUMERIC_VERSION > 0x01060200
-    if (LocaleCompare(image_info->magick,"AVIF") == 0)
-      error=heif_context_get_encoder_for_format(heif_context,
-        heif_compression_AV1,&heif_encoder);
-#endif
-    status=IsHeifSuccess(&error,image,exception);
-    if (status == MagickFalse)
-      break;
     if (image_info->quality != UndefinedCompressionQuality)
       {
         error=heif_encoder_set_lossy_quality(heif_encoder,(int)
